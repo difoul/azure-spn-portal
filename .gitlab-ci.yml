@@ -1,0 +1,223 @@
+variables:
+  PYTHON_VERSION: "3.12"
+  TERRAFORM_VERSION: "1.7"
+  FUNC_APP_NAME_DEV: "${FUNC_APP_NAME_DEV}"
+  FUNC_APP_NAME_PROD: "${FUNC_APP_NAME_PROD}"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  TF_IN_AUTOMATION: "true"
+
+stages:
+  - validate
+  - test
+  - build
+  - plan
+  - deploy
+
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+
+.python_base:
+  image: python:${PYTHON_VERSION}
+  cache:
+    key: pip-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .cache/pip
+
+.terraform_base:
+  image:
+    name: hashicorp/terraform:${TERRAFORM_VERSION}
+    entrypoint: [""]
+  before_script:
+    - export ARM_CLIENT_ID="${AZURE_CLIENT_ID}"
+    - export ARM_CLIENT_SECRET="${AZURE_CLIENT_SECRET}"
+    - export ARM_TENANT_ID="${AZURE_TENANT_ID}"
+    - export ARM_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID}"
+
+.azure_cli_base:
+  image: mcr.microsoft.com/azure-cli:latest
+  before_script:
+    - az login --service-principal
+        --username "${AZURE_CLIENT_ID}"
+        --password "${AZURE_CLIENT_SECRET}"
+        --tenant "${AZURE_TENANT_ID}"
+
+# ---------------------------------------------------------------------------
+# Validate stage
+# ---------------------------------------------------------------------------
+
+lint:python:
+  extends: .python_base
+  stage: validate
+  script:
+    - pip install --quiet ruff
+    - ruff check function_app/
+    - ruff format --check function_app/
+
+lint:terraform:
+  extends: .terraform_base
+  stage: validate
+  script:
+    - cd terraform/environments/dev
+    - terraform init -backend=false
+    - terraform validate
+    - cd "${CI_PROJECT_DIR}/terraform/environments/prod"
+    - terraform init -backend=false
+    - terraform validate
+
+typecheck:
+  extends: .python_base
+  stage: validate
+  script:
+    - pip install --quiet pyright -r function_app/requirements.txt
+    - pyright function_app/
+
+# ---------------------------------------------------------------------------
+# Test stage
+# ---------------------------------------------------------------------------
+
+unit-tests:
+  extends: .python_base
+  stage: test
+  script:
+    - pip install --quiet -r function_app/requirements.txt pytest pytest-cov pytest-asyncio
+    - pytest function_app/tests/
+        --cov=function_app
+        --cov-report=xml:coverage.xml
+        --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+# ---------------------------------------------------------------------------
+# Build stage
+# ---------------------------------------------------------------------------
+
+build:function:
+  extends: .python_base
+  stage: build
+  script:
+    - pip install --quiet --target function_app/.python_packages/lib/site-packages
+        -r function_app/requirements.txt
+    - cd function_app
+    - zip -r "${CI_PROJECT_DIR}/function_app.zip" .
+        -x "tests/*"
+        -x "**/__pycache__/*"
+  artifacts:
+    paths:
+      - function_app.zip
+    expire_in: 1 week
+
+# ---------------------------------------------------------------------------
+# Plan stage
+# ---------------------------------------------------------------------------
+
+terraform:plan:dev:
+  extends: .terraform_base
+  stage: plan
+  script:
+    - cd terraform/environments/dev
+    - terraform init
+    - terraform plan -out=tfplan-dev
+  artifacts:
+    paths:
+      - terraform/environments/dev/tfplan-dev
+      - terraform/environments/dev/.terraform
+      - terraform/environments/dev/.terraform.lock.hcl
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+terraform:plan:prod:
+  extends: .terraform_base
+  stage: plan
+  script:
+    - cd terraform/environments/prod
+    - terraform init
+    - terraform plan -out=tfplan-prod
+  artifacts:
+    paths:
+      - terraform/environments/prod/tfplan-prod
+      - terraform/environments/prod/.terraform
+      - terraform/environments/prod/.terraform.lock.hcl
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+
+# ---------------------------------------------------------------------------
+# Deploy stage
+# ---------------------------------------------------------------------------
+
+deploy:infra:dev:
+  extends: .terraform_base
+  stage: deploy
+  script:
+    - cd terraform/environments/dev
+    - terraform apply tfplan-dev
+  dependencies:
+    - terraform:plan:dev
+  needs:
+    - terraform:plan:dev
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment:
+    name: dev
+
+deploy:function:dev:
+  extends: .azure_cli_base
+  stage: deploy
+  script:
+    - az functionapp deployment source config-zip
+        --resource-group "${AZURE_RG_DEV}"
+        --name "${FUNC_APP_NAME_DEV}"
+        --src function_app.zip
+  dependencies:
+    - build:function
+  needs:
+    - build:function
+    - deploy:infra:dev
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment:
+    name: dev
+
+deploy:infra:prod:
+  extends: .terraform_base
+  stage: deploy
+  script:
+    - cd terraform/environments/prod
+    - terraform apply tfplan-prod
+  dependencies:
+    - terraform:plan:prod
+  needs:
+    - terraform:plan:prod
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  environment:
+    name: prod
+
+deploy:function:prod:
+  extends: .azure_cli_base
+  stage: deploy
+  script:
+    - az functionapp deployment source config-zip
+        --resource-group "${AZURE_RG_PROD}"
+        --name "${FUNC_APP_NAME_PROD}"
+        --src function_app.zip
+  dependencies:
+    - build:function
+  needs:
+    - build:function
+    - deploy:infra:prod
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  environment:
+    name: prod

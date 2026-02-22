@@ -1,0 +1,15 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "TENANT_ID": "<your-entra-id-tenant-id>",
+    "CLIENT_ID": "<portal-app-registration-client-id>",
+    "CLIENT_SECRET": "<portal-app-registration-client-secret>",
+    "ALLOWED_GROUP_ID": "<entra-id-security-group-id>",
+    "COSMOS_ENDPOINT": "<cosmos-db-account-endpoint>",
+    "COSMOS_DATABASE": "spn-portal",
+    "KEYVAULT_URI": "<key-vault-uri>",
+    "APPLICATIONINSIGHTS_CONNECTION_STRING": "<app-insights-connection-string>"
+  }
+}

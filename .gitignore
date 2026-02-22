@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+venv312/
+.python_packages/
+
+# Azure Functions
+local.settings.json
+bin/
+obj/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.lock.hcl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Build artifacts
+function_app.zip

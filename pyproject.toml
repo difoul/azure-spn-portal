@@ -1,0 +1,27 @@
+[project]
+name = "azure-spn-portal"
+version = "0.1.0"
+description = "Self-service portal for Azure Service Principal management"
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["function_app"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM", "RUF"]
+# UP017: datetime.UTC is 3.11+; UP047: type-param syntax is 3.12+
+# The Azure Functions local worker runs Python 3.10, so both are off-limits.
+ignore = ["UP017", "UP047"]
+
+[tool.pytest.ini_options]
+testpaths = ["function_app/tests"]
+asyncio_mode = "auto"
+
+[tool.pyright]
+pythonVersion = "3.12"
+include = ["function_app"]
+exclude = ["function_app/tests", "function_app/.python_packages"]
+typeCheckingMode = "basic"
+extraPaths = ["function_app/.python_packages/lib/site-packages"]
