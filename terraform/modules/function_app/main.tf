@@ -54,6 +54,9 @@ resource "azurerm_function_app_flex_consumption" "this" {
       "KEYVAULT_URI"                          = var.keyvault_uri
       #"APPLICATIONINSIGHTS_CONNECTION_STRING" = var.appinsights_connection_string
       "AZURE_CLIENT_ID"                       = var.user_assigned_identity_client_id
+      # CORS — Function App is private-endpoint-only; network security is at VNet level.
+      "WEBSITE_CORS_ALLOWED_ORIGINS"          = "*"
+      "WEBSITE_CORS_SUPPORT_CREDENTIALS"      = "false"
     },
     var.extra_app_settings,
   )

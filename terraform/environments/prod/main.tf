@@ -154,6 +154,20 @@ module "function_app" {
 }
 
 # ---------------------------------------------------------------------------
+# Static Web App
+# ---------------------------------------------------------------------------
+
+module "static_web_app" {
+  source = "../../modules/static_web_app"
+
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku_name            = var.swa_sku
+  tags                = var.tags
+}
+
+# ---------------------------------------------------------------------------
 # Additional RBAC – give Function App system identity Cosmos DB access
 # ---------------------------------------------------------------------------
 
@@ -206,4 +220,13 @@ output "application_client_id" {
 
 output "managed_identity_principal_id" {
   value = module.identity.user_assigned_identity_principal_id
+}
+
+output "swa_default_hostname" {
+  value = module.static_web_app.default_host_name
+}
+
+output "swa_api_key" {
+  value     = module.static_web_app.api_key
+  sensitive = true
 }

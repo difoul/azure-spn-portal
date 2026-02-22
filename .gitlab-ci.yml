@@ -1,5 +1,6 @@
 variables:
   PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
   TERRAFORM_VERSION: "1.7"
   FUNC_APP_NAME_DEV: "${FUNC_APP_NAME_DEV}"
   FUNC_APP_NAME_PROD: "${FUNC_APP_NAME_PROD}"
@@ -24,6 +25,13 @@ stages:
     paths:
       - .cache/pip
 
+.node_base:
+  image: node:${NODE_VERSION}
+  cache:
+    key: npm-${CI_COMMIT_REF_SLUG}
+    paths:
+      - frontend/node_modules/
+
 .terraform_base:
   image:
     name: hashicorp/terraform:${TERRAFORM_VERSION}
@@ -45,6 +53,12 @@ stages:
 # ---------------------------------------------------------------------------
 # Validate stage
 # ---------------------------------------------------------------------------
+
+lint:frontend:
+  extends: .node_base
+  stage: validate
+  script:
+    - cd frontend && npm ci && npm run lint && npm run typecheck
 
 lint:python:
   extends: .python_base
@@ -96,6 +110,20 @@ unit-tests:
 # ---------------------------------------------------------------------------
 # Build stage
 # ---------------------------------------------------------------------------
+
+build:frontend:
+  extends: .node_base
+  stage: build
+  variables:
+    VITE_TENANT_ID: "${VITE_TENANT_ID}"
+    VITE_CLIENT_ID: "${VITE_CLIENT_ID_DEV}"
+    VITE_API_BASE_URL: "https://${FUNC_APP_NAME_DEV}.azurewebsites.net/api/v1"
+  script:
+    - cd frontend && npm ci && npm run build
+  artifacts:
+    paths:
+      - frontend/dist
+    expire_in: 1 week
 
 build:function:
   extends: .python_base
@@ -181,6 +209,26 @@ deploy:function:dev:
     - build:function
   needs:
     - build:function
+    - deploy:infra:dev
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment:
+    name: dev
+
+deploy:frontend:dev:
+  image: mcr.microsoft.com/azure-cli:latest
+  stage: deploy
+  script:
+    - az staticwebapp deploy
+        --name "swa-spn-portal-dev"
+        --resource-group "${AZURE_RG_DEV}"
+        --source frontend/dist
+        --token "${SWA_DEPLOY_TOKEN_DEV}"
+        --no-wait
+  dependencies:
+    - build:frontend
+  needs:
+    - build:frontend
     - deploy:infra:dev
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

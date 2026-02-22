@@ -42,6 +42,12 @@ variable "log_retention_days" {
   default     = 90
 }
 
+variable "swa_sku" {
+  description = "SKU for the Static Web App (Free or Standard)."
+  type        = string
+  default     = "Standard"
+}
+
 variable "tags" {
   description = "Tags to apply to all resources."
   type        = map(string)

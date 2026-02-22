@@ -61,6 +61,12 @@ variable "deploy_bastion" {
   default     = false
 }
 
+variable "swa_sku" {
+  description = "SKU for the Static Web App (Free or Standard)."
+  type        = string
+  default     = "Standard"
+}
+
 variable "tags" {
   description = "Tags to apply to all resources."
   type        = map(string)

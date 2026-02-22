@@ -206,6 +206,20 @@ resource "azurerm_role_assignment" "sp_kv_secrets_officer" {
 }
 
 # ---------------------------------------------------------------------------
+# Static Web App
+# ---------------------------------------------------------------------------
+
+module "static_web_app" {
+  source = "../../modules/static_web_app"
+
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku_name            = var.swa_sku
+  tags                = var.tags
+}
+
+# ---------------------------------------------------------------------------
 # Bastion + Test VM (dev only)
 # ---------------------------------------------------------------------------
 
@@ -262,6 +276,15 @@ output "managed_identity_principal_id" {
 
 output "allowed_group_id" {
   value = module.identity.allowed_group_id
+}
+
+output "swa_default_hostname" {
+  value = module.static_web_app.default_host_name
+}
+
+output "swa_api_key" {
+  value     = module.static_web_app.api_key
+  sensitive = true
 }
 
 output "bastion_name" {
